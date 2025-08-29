@@ -106,7 +106,10 @@ jobs:
       - name: Show MSVC
         shell: cmd
         run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" %PLATFORM%
+          for /f "usebackq tokens=*" %%i in (`vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
+            set VS_PATH=%%i
+          )
+          call "%VS_PATH%\VC\Auxiliary\Build\vcvarsall.bat" %PLATFORM%
           where cl
           where nmake
 
