@@ -1,4 +1,4 @@
-name: Build Apache HTTPD Stack (Windows)
+name: Build Apache HTTPD Stack (Windows VS17)
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ env:
 
 jobs:
   build:
-    name: Build on Windows
+    name: Build Apache with VS17 (MSVC 2022)
     runs-on: windows-2022
     timeout-minutes: 360
 
@@ -55,13 +55,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure PLATFORM/BUILD_TYPE defaults for push/PR
+      - name: Ensure PLATFORM/BUILD_TYPE defaults
         id: ensure-defaults
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not $env:PLATFORM -or $env:PLATFORM -eq '') { "$([string]::Format('PLATFORM={0}','x64'))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
-          if (-not $env:BUILD_TYPE -or $env:BUILD_TYPE -eq '') { "$([string]::Format('BUILD_TYPE={0}','Release'))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          if (-not $env:PLATFORM -or $env:PLATFORM -eq '') { "PLATFORM=x64" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          if (-not $env:BUILD_TYPE -or $env:BUILD_TYPE -eq '') { "BUILD_TYPE=Release" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
           "Using PLATFORM=$env:PLATFORM, BUILD_TYPE=$env:BUILD_TYPE"
 
       - name: Enable long paths (Windows)
@@ -79,7 +79,6 @@ jobs:
           choco install 7zip --no-progress --yes
           
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-          
           cmake --version
           perl -v | Out-Null
           
@@ -103,13 +102,16 @@ jobs:
           nasm -v
           where nasm
 
+      - name: Setup MSVC 2022 (VS17, toolset v143)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ env.PLATFORM }}
+          toolset: 143
+
       - name: Show MSVC
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
-            set VS_PATH=%%i
-          )
-          call "%VS_PATH%\VC\Auxiliary\Build\vcvarsall.bat" %PLATFORM%
+          echo Using VS17 toolset v143
           where cl
           where nmake
 
