@@ -1,5 +1,179 @@
 @echo off
 
+rem ---------------------------------------------------------------------------
+rem NEW: Ensure base folder structure exists and download all sources unconditionally
+rem      (не проверяем наличие — считаем, что на диске ничего нет)
+rem ---------------------------------------------------------------------------
+
+rem Базовые пути
+set "BUILD_BASE=C:\Development\Apache24\build"
+set "PREFIX=C:\Apache24"
+set "_SRC_ROOT=C:\Development\Apache24\src"
+
+rem Создать структуру каталогов
+mkdir "C:\Development" 2>nul
+mkdir "C:\Development\Apache24" 2>nul
+mkdir "C:\Development\Apache24\src" 2>nul
+mkdir "C:\Development\Apache24\build" 2>nul
+mkdir "%PREFIX%" 2>nul
+mkdir "%PREFIX%\bin" 2>nul
+mkdir "%PREFIX%\lib" 2>nul
+mkdir "%PREFIX%\include" 2>nul
+mkdir "%PREFIX%\conf" 2>nul
+mkdir "%PREFIX%\cgi-bin" 2>nul
+
+rem Убедиться, что PowerShell доступен (для загрузок)
+where powershell >nul 2>&1 || (
+  echo PowerShell not found. Please ensure PowerShell is installed and in PATH.
+  exit /b 1
+)
+
+rem Версии пакетов (должны совпадать с оригиналом ниже)
+set "ZLIB=zlib-1.3.1"
+set "PCRE2=pcre2-10.45"
+set "EXPAT=expat-2.7.1"
+set "OPENSSL=openssl-3.5.1"
+set "LIBXML2=libxml2-2.14.5"
+set "JANSSON=jansson-2.14.1"
+set "BROTLI=brotli-1.1.0"
+set "LUA=lua-5.4.8"
+set "APR=apr-1.7.6"
+set "APR-ICONV=apr-iconv-1.2.2"
+set "APR-UTIL=apr-util-1.6.3"
+set "NGHTTP2=nghttp2-1.66.0"
+set "CURL=curl-8.15.0"
+set "HTTPD=httpd-2.4.65"
+set "MOD_FCGID=mod_fcgid-2.3.9"
+
+rem Прямые ссылки на архивы исходников
+set "URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz"
+set "URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz"
+set "URL_EXPAT=https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz"
+set "URL_OPENSSL=https://www.openssl.org/source/openssl-3.5.1.tar.gz"
+set "URL_LIBXML2=https://download.gnome.org/sources/libxml2/2.14/libxml2-2.14.5.tar.xz"
+set "URL_JANSSON=https://github.com/akheron/jansson/releases/download/v2.14.1/jansson-2.14.1.tar.gz"
+set "URL_BROTLI=https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
+set "URL_LUA=https://www.lua.org/ftp/lua-5.4.8.tar.gz"
+set "URL_APR=https://downloads.apache.org/apr/apr-1.7.6.tar.gz"
+set "URL_APR_ICONV=https://downloads.apache.org/apr/apr-iconv-1.2.2.tar.gz"
+set "URL_APR_UTIL=https://downloads.apache.org/apr/apr-util-1.6.3.tar.gz"
+set "URL_NGHTTP2=https://github.com/nghttp2/nghttp2/releases/download/v1.66.0/nghttp2-1.66.0.tar.xz"
+set "URL_CURL=https://curl.se/download/curl-8.15.0.tar.xz"
+set "URL_HTTPD=https://downloads.apache.org/httpd/httpd-2.4.65.tar.bz2"
+set "URL_MOD_FCGID=https://downloads.apache.org/httpd/mod_fcgid/mod_fcgid-2.3.9.tar.gz"
+
+rem Проверка наличия 7z (если есть, используем для распаковки быстрее)
+where 7z >nul 2>&1 && (set "SEVENZIP_AVAILABLE=1") || (set "SEVENZIP_AVAILABLE=0")
+
+rem Безусловно загрузить и распаковать все архивы в src (не проверяя наличие)
+call :_fetch_and_unpack "%ZLIB%"       "%URL_ZLIB%"
+call :_fetch_and_unpack "%PCRE2%"      "%URL_PCRE2%"
+call :_fetch_and_unpack "%EXPAT%"      "%URL_EXPAT%"
+call :_fetch_and_unpack "%OPENSSL%"    "%URL_OPENSSL%"
+call :_fetch_and_unpack "%LIBXML2%"    "%URL_LIBXML2%"
+call :_fetch_and_unpack "%JANSSON%"    "%URL_JANSSON%"
+call :_fetch_and_unpack "%BROTLI%"     "%URL_BROTLI%"  "brotli-1.1.0"  1
+call :_fetch_and_unpack "%LUA%"        "%URL_LUA%"
+call :_fetch_and_unpack "%APR%"        "%URL_APR%"
+call :_fetch_and_unpack "%APR-ICONV%"  "%URL_APR_ICONV%"
+call :_fetch_and_unpack "%APR-UTIL%"   "%URL_APR_UTIL%"
+call :_fetch_and_unpack "%NGHTTP2%"    "%URL_NGHTTP2%"
+call :_fetch_and_unpack "%CURL%"       "%URL_CURL%"
+call :_fetch_and_unpack "%HTTPD%"      "%URL_HTTPD%"
+call :_fetch_and_unpack "%MOD_FCGID%"  "%URL_MOD_FCGID%"
+
+goto :_after_new_header
+
+:_fetch_and_unpack
+rem %1 = ожидаемая папка исходников (например, zlib-1.3.1)
+rem %2 = URL
+rem %3 = override extracted dir name (optional)
+rem %4 = strip top-level flag (1=yes) (optional)
+set "_want_dir=%~1"
+set "_url=%~2"
+set "_override=%~3"
+set "_strip=%~4"
+set "_dest_dir=%_SRC_ROOT%\%_want_dir%"
+
+echo Downloading: %_url%
+set "_tmp=%TEMP%\dl-%RANDOM%-%RANDOM%"
+mkdir "%_tmp%" >nul 2>&1
+
+for %%F in ("%_url%") do set "_fname=%_tmp%\%%~nxF"
+
+powershell -NoLogo -NoProfile -Command ^
+  "try {Invoke-WebRequest -Uri '%_url%' -OutFile '%_fname%' -UseBasicParsing; exit 0} catch {Write-Error $_; exit 1}"
+if errorlevel 1 (
+  echo Download failed: %_url%
+  rmdir /s /q "%_tmp%" >nul 2>&1
+  exit /b 1
+)
+
+mkdir "%_tmp%\x" >nul 2>&1
+
+set "_det="
+for %%E in (.tar.gz .tar.xz .tar.bz2 .tgz .txz .tbz2 .zip .gz .xz .bz2) do (
+  echo.%_fname% | findstr /i "%%E" >nul && set "_det=%%E"
+)
+if not defined _det set "_det=.tar.gz"
+
+if "%SEVENZIP_AVAILABLE%"=="1" (
+  if /i "%_det%"==".zip" (
+    7z x -y -o"%_tmp%\x" "%_fname%" >nul
+  ) else (
+    7z x -y -o"%_tmp%\x" "%_fname%" >nul
+    for /f "delims=" %%A in ('dir /b "%_tmp%\x\*.tar" 2^>nul') do (
+      7z x -y -o"%_tmp%\x" "%_tmp%\x\%%A" >nul
+    )
+  )
+) else (
+  if /i "%_det%"==".zip" (
+    powershell -NoLogo -NoProfile -Command "Expand-Archive -Path '%_fname%' -DestinationPath '%_tmp%\x' -Force"
+  ) else (
+    tar -xf "%_fname%" -C "%_tmp%\x" 2>nul
+    if errorlevel 1 powershell -NoLogo -NoProfile -Command "tar -xf '%_fname%' -C '%_tmp%\x'"
+  )
+)
+
+set "_top="
+for /f "delims=" %%D in ('dir /b /ad "%_tmp%\x"') do if not defined _top set "_top=%%D"
+
+if defined _override (set "_final=%_SRC_ROOT%\%_override%") else (set "_final=%_SRC_ROOT%\%_top%")
+mkdir "%_SRC_ROOT%" 2>nul
+
+if "%_strip%"=="1" (
+  if not defined _top (
+    echo Extraction failed for %_want_dir%
+    rmdir /s /q "%_tmp%" >nul 2>&1
+    exit /b 1
+  )
+  if /i "%_top%"=="%_want_dir%" (
+    move "%_tmp%\x\%_top%" "%_dest_dir%" >nul
+  ) else (
+    move "%_tmp%\x\%_top%" "%_final%" >nul
+    if /i not "%_final%"=="%_dest_dir%" ren "%_final%" "%_want_dir%" >nul
+  )
+) else (
+  if defined _top (
+    move "%_tmp%\x\%_top%" "%_dest_dir%" >nul
+  ) else (
+    mkdir "%_dest_dir%" >nul 2>&1
+    xcopy "%_tmp%\x\*" "%_dest_dir%\*" /e /i /y >nul
+  )
+)
+
+if not exist "%_dest_dir%" (
+  echo Failed to prepare source folder: %_dest_dir%
+  rmdir /s /q "%_tmp%" >nul 2>&1
+  exit /b 1
+)
+
+echo Source ready: %_dest_dir%
+rmdir /s /q "%_tmp%" >nul 2>&1
+exit /b 0
+
+:_after_new_header
+
 rem @(#)build_all.bat 3.9 - 2025-08-11 tangent
 rem
 rem 1.0 - Initial release. 2020-12-17
