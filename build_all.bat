@@ -13,7 +13,8 @@ rem 1.4 - Remove extraneous CMake INSTALL_MSVC_PDB option entries.
 rem       Bump releases: PCRE (8.45), EXPAT (2.4.1), OPENSSL (1.1.1l), LIBXML2 (2.9.12),
 rem       LUA (5.4.3), NGHTTP2 (1.44.0), CURL (7.78.0), HTTPD (2.4.48). 2021-08-27
 rem 1.5 - Bump releases: JANSSON (2.14), NGHTTP2 (1.46.0), CURL (7.80.0), HTTPD (2.4.51). 2021-11-22
-rem 1.6 - Bump EXPAT (2.4.2), CURL (7.81.0). Change LUA option LUA_COMPAT_ALL to LUA_COMPAT_5_3.
+rem 1.6 - Bump releases: HTTPD (2.4.52), OpenSSL (1.1.1m). 2021-12-28
+rem 1.7 - Bump EXPAT (2.4.2), CURL (7.81.0). Change LUA option LUA_COMPAT_ALL to LUA_COMPAT_5_3.
 rem       Patch APR (1.7.0) handle leak (PR 61165 [Ivan Zhakov]). Refine Perl patch edits.
 rem       Update VCVARSALL script path for MS Visual Studio 2022 (VS17). 2022-01-14
 rem 1.8 - Bump CURL (7.82.0), EXPAT (2.4.7), HTTPD (2.4.53), LUA (5.4.4), NGHTTP2 (1.47.0),
@@ -61,65 +62,10 @@ rem Apache build command file for Windows.
 rem
 setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-rem ---------------------------------------------------------------------------
-rem NEW: Ensure base folder structure exists and required tools are available.
-rem ---------------------------------------------------------------------------
-
 rem Set required build base folder and target prefix.
 rem
 set BUILD_BASE=C:\Development\Apache24\build
 set PREFIX=C:\Apache24
-
-rem Create initial folder structure if missing.
-if not exist "C:\Development" mkdir "C:\Development"
-if not exist "C:\Development\Apache24" mkdir "C:\Development\Apache24"
-if not exist "C:\Development\Apache24\src" mkdir "C:\Development\Apache24\src"
-if not exist "C:\Development\Apache24\build" mkdir "C:\Development\Apache24\build"
-if not exist "%PREFIX%" mkdir "%PREFIX%"
-if not exist "%PREFIX%\bin" mkdir "%PREFIX%\bin"
-if not exist "%PREFIX%\lib" mkdir "%PREFIX%\lib"
-if not exist "%PREFIX%\include" mkdir "%PREFIX%\include"
-if not exist "%PREFIX%\conf" mkdir "%PREFIX%\conf"
-if not exist "%PREFIX%\cgi-bin" mkdir "%PREFIX%\cgi-bin"
-
-rem Ensure PowerShell is available for downloads.
-where powershell >nul 2>&1
-if errorlevel 1 (
-  echo PowerShell not found. Please ensure PowerShell is installed and in PATH.
-  exit /b 1
-)
-
-rem NEW: URLs for source archives (adjust if you host mirrors).
-set URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz
-set URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz
-set URL_EXPAT=https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz
-set URL_OPENSSL=https://www.openssl.org/source/openssl-3.5.1.tar.gz
-set URL_LIBXML2=https://download.gnome.org/sources/libxml2/2.14/libxml2-2.14.5.tar.xz
-set URL_JANSSON=https://github.com/akheron/jansson/releases/download/v2.14.1/jansson-2.14.1.tar.gz
-set URL_BROTLI=https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz
-set URL_LUA=https://www.lua.org/ftp/lua-5.4.8.tar.gz
-set URL_APR=https://downloads.apache.org/apr/apr-1.7.6.tar.gz
-set URL_APR_ICONV=https://downloads.apache.org/apr/apr-iconv-1.2.2.tar.gz
-set URL_APR_UTIL=https://downloads.apache.org/apr/apr-util-1.6.3.tar.gz
-set URL_NGHTTP2=https://github.com/nghttp2/nghttp2/releases/download/v1.66.0/nghttp2-1.66.0.tar.xz
-set URL_CURL=https://curl.se/download/curl-8.15.0.tar.xz
-set URL_HTTPD=https://downloads.apache.org/httpd/httpd-2.4.65.tar.bz2
-set URL_MOD_FCGID=https://downloads.apache.org/httpd/mod_fcgid/mod_fcgid-2.3.9.tar.gz
-
-rem NEW: Ensure required external tools (CMake, Perl, NASM) exist; if missing, offer to install via winget/choco if available.
-call :ensure_tool cmake "CMake" "winget install --id Kitware.CMake -e --source winget" "choco install cmake --installargs '"ADD_CMAKE_TO_PATH=System"' -y"
-call :ensure_tool perl "Strawberry Perl" "winget install --id StrawberryPerl.StrawberryPerl -e --source winget" "choco install strawberryperl -y"
-call :ensure_tool nasm "NASM" "winget install --id NASM.NASM -e --source winget" "choco install nasm -y"
-
-rem If 7zip not present, use PowerShell/Expand-Archive and tar builtin. Also check 7z for speed.
-where 7z >nul 2>&1
-if errorlevel 1 (
-  set SEVENZIP_AVAILABLE=0
-) else (
-  set SEVENZIP_AVAILABLE=1
-)
-
-rem ---------------------------------------------------------------------------
 
 rem Set required build platform to x86 or x64.
 rem
@@ -166,46 +112,15 @@ rem ----------------------------------------------------------------------------
 rem
 rem Define path to MS Visual Studio build environment script.
 
-@echo off
-rem Find the latest installed VC tools
-for /f "usebackq tokens=*" %%i in (`vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
-    set VSPATH=%%i
+if not defined VCVARSALL (
+  set "VCVARSALL=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
 )
-
-if not defined VSPATH (
-    echo Could not find Visual Studio installation.
-    exit /b 1
-)
-
-set VCVARSALL=%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat
-
 if exist "%VCVARSALL%" (
-    echo Using "%VCVARSALL%"
-    call "%VCVARSALL%" %PLATFORM%
+  call "%VCVARSALL%" %PLATFORM%
 ) else (
-    echo Could not find "%VCVARSALL%"
-    exit /b 1
+  echo Could not find "%VCVARSALL%"
+  exit /b
 )
-
-rem ------------------------------------------------------------------------------
-rem NEW: Auto-download and extract sources if missing
-rem ------------------------------------------------------------------------------
-
-call :ensure_src "%ZLIB%"       "%URL_ZLIB%"
-call :ensure_src "%PCRE2%"      "%URL_PCRE2%"
-call :ensure_src "%EXPAT%"      "%URL_EXPAT%"
-call :ensure_src "%OPENSSL%"    "%URL_OPENSSL%"
-call :ensure_src "%LIBXML2%"    "%URL_LIBXML2%"
-call :ensure_src "%JANSSON%"    "%URL_JANSSON%"
-call :ensure_src "%BROTLI%"     "%URL_BROTLI%" "brotli-1.1.0" 1
-call :ensure_src "%LUA%"        "%URL_LUA%"
-call :ensure_src "%APR%"        "%URL_APR%"
-call :ensure_src "%APR-ICONV%"  "%URL_APR_ICONV%"
-call :ensure_src "%APR-UTIL%"   "%URL_APR_UTIL%"
-call :ensure_src "%NGHTTP2%"    "%URL_NGHTTP2%"
-call :ensure_src "%CURL%"       "%URL_CURL%"
-call :ensure_src "%HTTPD%"      "%URL_HTTPD%"
-call :ensure_src "%MOD_FCGID%"  "%URL_MOD_FCGID%"
 
 rem ------------------------------------------------------------------------------
 rem
@@ -784,150 +699,3 @@ if exist "%BUILD_BASE%\!PACKAGE!" (
   exit /b 1
 )
 exit /b
-
-rem ------------------------------------------------------------------------------
-rem NEW: Ensure a tool exists, optionally install via winget or choco.
-rem %1 = exe name to probe (in PATH)
-rem %2 = friendly tool name
-rem %3 = winget install command (optional)
-rem %4 = choco install command (optional)
-:ensure_tool
-set "_tool_exe=%~1"
-set "_tool_name=%~2"
-set "_winget_cmd=%~3"
-set "_choco_cmd=%~4"
-
-where "%_tool_exe%" >nul 2>&1
-if errorlevel 1 (
-  echo %_tool_name% not found in PATH.
-  where winget >nul 2>&1
-  if not errorlevel 1 if not "%_winget_cmd%"=="" (
-    echo Attempting to install %_tool_name% via winget...
-    %_winget_cmd%
-  ) else (
-    where choco >nul 2>&1
-    if not errorlevel 1 if not "%_choco_cmd%"=="" (
-      echo Attempting to install %_tool_name% via Chocolatey...
-      %_choco_cmd%
-    ) else (
-      echo Cannot auto-install %_tool_name%. Please install it and re-run.
-    )
-  )
-)
-exit /b 0
-
-rem ------------------------------------------------------------------------------
-rem NEW: Ensure a source directory exists; if not, download and extract.
-rem %1 = expected source dir name (e.g., zlib-1.3.1)
-rem %2 = URL
-rem %3 = override extracted dir name (optional)
-rem %4 = flag: strip top-level directory from archive (1=yes for some GitHub archives) (optional)
-:ensure_src
-set "_want_dir=%~1"
-set "_url=%~2"
-set "_override=%~3"
-set "_strip=%~4"
-set "_src_root=C:\Development\Apache24\src"
-set "_dest_dir=%_src_root%\%_want_dir%"
-
-if exist "%_dest_dir%" (
-  echo Source present: %_dest_dir%
-  exit /b 0
-)
-
-echo Missing source: %_want_dir%. Attempting to download...
-set "_tmp=%TEMP%\dl-%RANDOM%-%RANDOM%"
-mkdir "%_tmp%" >nul 2>&1
-
-for %%F in ("%_url%") do set "_fname=%_tmp%\%%~nxF"
-powershell -NoLogo -NoProfile -Command ^
-  "try {Invoke-WebRequest -Uri '%_url%' -OutFile '%_fname%' -UseBasicParsing; exit 0} catch {Write-Error $_; exit 1}"
-if errorlevel 1 (
-  echo Download failed: %_url%
-  rmdir /s /q "%_tmp%" >nul 2>&1
-  exit /b 1
-)
-
-rem Decide extraction method by extension
-set "_ext=%_fname%"
-for %%E in (.tar.gz .tar.xz .tar.bz2 .tgz .txz .tbz2 .zip .gz .xz .bz2) do (
-  echo.%_fname%| findstr /i "%%E" >nul && set "_det=%%E"
-)
-
-if not defined _det (
-  rem Fallback to tar
-  set "_det=.tar.gz"
-)
-
-rem Prefer 7z if available for tar.* and .zip speed
-if "%SEVENZIP_AVAILABLE%"=="1" (
-  if /i "%_det%"==".zip" (
-    7z x -y -o"%_tmp%\x" "%_fname%" >nul
-  ) else (
-    7z x -y -o"%_tmp%\x" "%_fname%" >nul
-    for /f "delims=" %%A in ('dir /b "%_tmp%\x\*.tar" 2^>nul') do (
-      7z x -y -o"%_tmp%\x" "%_tmp%\x\%%A" >nul
-    )
-  )
-) else (
-  rem Use tar.exe / PowerShell fallback
-  if /i "%_det%"==".zip" (
-    powershell -NoLogo -NoProfile -Command "Expand-Archive -Path '%_fname%' -DestinationPath '%_tmp%\x' -Force"
-  ) else (
-    tar -xf "%_fname%" -C "%_tmp%\x%" 2>nul
-    if errorlevel 1 (
-      powershell -NoLogo -NoProfile -Command "tar -xf '%_fname%' -C '%_tmp%\x'"
-    )
-  )
-)
-
-rem Determine extracted top-level directory
-set "_top="
-for /f "delims=" %%D in ('dir /b /ad "%_tmp%\x"') do (
-  if not defined _top set "_top=%%D"
-)
-
-if defined _override (
-  set "_final=%_src_root%\%_override%"
-) else (
-  set "_final=%_src_root%\%_top%"
-)
-
-if "%_strip%"=="1" (
-  rem Some GitHub archives have 'brotli-1.1.0' inside a parent like 'brotli-1.1.0'
-  rem If we need to coerce to _want_dir, move/rename accordingly.
-  if not exist "%_src_root%" mkdir "%_src_root%" >nul 2>&1
-  if not defined _top (
-    echo Extraction failed for %_want_dir%
-    rmdir /s /q "%_tmp%" >nul 2>&1
-    exit /b 1
-  )
-  rem If the top matches the desired name already, move as-is.
-  if /i "%_top%"=="%_want_dir%" (
-    move "%_tmp%\x\%_top%" "%_dest_dir%" >nul
-  ) else (
-    move "%_tmp%\x\%_top%" "%_final%" >nul
-    if /i not "%_final%"=="%_dest_dir%" (
-      ren "%_final%" "%_want_dir%" >nul
-    )
-  )
-) else (
-  if not exist "%_src_root%" mkdir "%_src_root%" >nul 2>&1
-  if defined _top (
-    move "%_tmp%\x\%_top%" "%_dest_dir%" >nul
-  ) else (
-    rem If archive extracted directly into files, create dest dir and move contents
-    mkdir "%_dest_dir%" >nul 2>&1
-    xcopy "%_tmp%\x\*" "%_dest_dir%\*" /e /i /y >nul
-  )
-)
-
-if not exist "%_dest_dir%" (
-  echo Failed to prepare source folder: %_dest_dir%
-  rmdir /s /q "%_tmp%" >nul 2>&1
-  exit /b 1
-)
-
-echo Source ready: %_dest_dir%
-rmdir /s /q "%_tmp%" >nul 2>&1
-exit /b 0
