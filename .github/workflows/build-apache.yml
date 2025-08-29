@@ -1,0 +1,188 @@
+name: Build Apache HTTPD Stack (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: CMake build type
+        type: choice
+        required: true
+        default: Release
+        options: [Release, Debug]
+      platform:
+        description: Target architecture
+        type: choice
+        required: true
+        default: x64
+        options: [x64, x86]
+  push:
+    branches: [ main ]
+    paths:
+      - 'build_all.bat'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'build_all.bat'
+      - '.github/workflows/**'
+
+env:
+  BUILD_BASE: C:\Development\Apache24\build
+  PREFIX: C:\Apache24
+  PLATFORM: ${{ inputs.platform || 'x64' }}
+  BUILD_TYPE: ${{ inputs.build_type || 'Release' }}
+  INSTALL_PDB: OFF
+
+jobs:
+  build:
+    name: Build on Windows ${{ env.PLATFORM }} (${{ env.BUILD_TYPE }})
+    runs-on: windows-2022
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Enable long paths (Windows)
+        run: |
+          git config --system core.longpaths true
+
+      - name: Install dependencies (CMake, Perl, NASM, 7zip)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco feature enable -n allowGlobalConfirmation
+          choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress
+          choco install strawberryperl --no-progress
+          choco install nasm --no-progress
+          choco install 7zip --no-progress
+
+      - name: Prepare sources cache key
+        id: cache-key
+        shell: pwsh
+        run: |
+          # Cache all extracted sources under C:\Development\Apache24\src
+          $key = "apache-src-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
+          "key=$key" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Cache extracted sources
+        id: cache-src
+        uses: actions/cache@v4
+        with:
+          path: C:\Development\Apache24\src
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Cache build outputs (C:\Apache24)
+        id: cache-prefix
+        uses: actions/cache@v4
+        with:
+          path: C:\Apache24
+          key: apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}-${{ github.run_id }}
+          restore-keys: |
+            apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}-
+
+      - name: Show tool versions
+        shell: cmd
+        run: |
+          cmake --version
+          perl --version
+          nasm -v
+          nmake /?
+          cl 2>nul || ver
+
+      - name: Configure MSVC environment
+        shell: cmd
+        run: |
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" ${{ env.PLATFORM }}
+          where cl
+          where nmake
+
+      - name: Run build script
+        shell: cmd
+        env:
+          PLATFORM: ${{ env.PLATFORM }}
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
+          BUILD_BASE: ${{ env.BUILD_BASE }}
+          PREFIX: ${{ env.PREFIX }}
+          INSTALL_PDB: ${{ env.INSTALL_PDB }}
+        run: |
+          rem Ensure the script is in the workspace
+          dir
+          call build_all.bat
+
+      - name: Package artifacts
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dst = "$env:RUNNER_TEMP\Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}.zip"
+          if (Test-Path "${{ env.PREFIX }}") {
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            if (Test-Path $dst) { Remove-Item $dst -Force }
+            [System.IO.Compression.ZipFile]::CreateFromDirectory("${{ env.PREFIX }}", $dst)
+            Write-Host "Packaged to $dst"
+          } else {
+            Write-Host "Nothing to package; prefix not found."
+          }
+
+      - name: Upload build prefix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}
+          path: |
+            C:\Apache24\**
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}
+          path: |
+            C:\Development\Apache24\build\**\CMakeFiles\CMakeOutput.log
+            C:\Development\Apache24\build\**\CMakeFiles\CMakeError.log
+            C:\Development\Apache24\build\**\*.log
+
+  release:
+    name: Draft GitHub Release
+    needs: build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Apache24-${{ needs.build.outputs.platform || 'x64' }}-${{ needs.build.outputs.build_type || 'Release' }}
+          path: dist
+
+      - name: Create release archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = "Apache24-${{ github.run_number }}-${{ github.sha.Substring(0,7) }}.zip"
+          if (Test-Path "dist") {
+            if (Test-Path $zip) { Remove-Item $zip -Force }
+            Add-Type -AssemblyName System.IO.Compression.FileSystem
+            [System.IO.Compression.ZipFile]::CreateFromDirectory("dist", $zip)
+            Write-Host "Zipped: $zip"
+          } else {
+            Write-Host "dist folder not found; skipping."
+          }
+
+      - name: Create GitHub Release (draft)
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: build-${{ github.run_number }}
+          name: "Apache24 Build #${{ github.run_number }}"
+          body: |
+            Automated build for commit ${{ github.sha }}.
+            Platform: ${{ env.PLATFORM }}
+            Build Type: ${{ env.BUILD_TYPE }}
+          files: |
+            Apache24-*.zip
