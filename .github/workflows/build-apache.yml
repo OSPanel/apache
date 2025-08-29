@@ -76,18 +76,35 @@ jobs:
           choco feature enable -n allowGlobalConfirmation
           choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
           choco install strawberryperl --no-progress --yes
-          # Prefer nasm.portable for immediate availability on PATH
           choco install nasm --no-progress --yes
           choco install 7zip --no-progress --yes
-          # Verify tools and adjust PATH for current session if needed
+          
+          # Refresh environment variables to pick up new PATH entries
+          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+          
+          # Verify tools
           cmake --version
           perl -v | Out-Null
+          
+          # Check if nasm is available, if not try common installation paths
           if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
-            $chocoBin = 'C:\ProgramData\chocolatey\bin'
-            if (Test-Path (Join-Path $chocoBin 'nasm.exe')) {
-              $env:PATH = "$chocoBin;$env:PATH"
+            $possiblePaths = @(
+              'C:\ProgramData\chocolatey\bin',
+              'C:\ProgramData\chocolatey\lib\nasm\tools',
+              'C:\Program Files\NASM'
+            )
+            
+            foreach ($path in $possiblePaths) {
+              $nasmPath = Join-Path $path 'nasm.exe'
+              if (Test-Path $nasmPath) {
+                $env:PATH = "$path;$env:PATH"
+                "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+                Write-Host "Added $path to PATH"
+                break
+              }
             }
           }
+          
           nasm -v
           where nasm
 
