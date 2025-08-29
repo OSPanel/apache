@@ -77,7 +77,7 @@ jobs:
           choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
           choco install strawberryperl --no-progress --yes
           # Prefer nasm.portable for immediate availability on PATH
-          choco install nasm.portable --no-progress --yes
+          choco install nasm --no-progress --yes
           choco install 7zip --no-progress --yes
           # Verify tools and adjust PATH for current session if needed
           cmake --version
