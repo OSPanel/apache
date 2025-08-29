@@ -40,51 +40,30 @@ rem ----------------------------------------------------------------------------
 ::   call :log_error "message"
 ::   call :group_start "title"
 ::   call :group_end
-::
-:: Colors (Windows ANSI via VirtualTerminal) and GitHub Actions groups.
-
-:: Enable ANSI on Windows 10+ console
-for /f "tokens=2 delims=:." %%v in ('ver') do set "_ver=%%v"
-for /f "tokens=1 delims= " %%v in ("%_ver%") do set "_maj=%%v"
-if not defined NO_VT ^
-  if "%_maj%" GEQ "10" (
-    >nul 2>&1 reg query HKCU\Console /v VirtualTerminalLevel || (
-      reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f >nul 2>&1
-    )
-)
-
-set "C_RESET=\x1b[0m"
-set "C_DIM=\x1b[2m"
-set "C_BOLD=\x1b[1m"
-set "C_INFO=\x1b[36m"
-set "C_OK=\x1b[32m"
-set "C_WARN=\x1b[33m"
-set "C_ERR=\x1b[31m"
-set "C_TITLE=\x1b[95m"
 
 :log_info
   set "_msg=%~1"
-  call echo %C_INFO%ℹ% C_RESET% %_msg%
+  call echo ℹ% C_RESET% %_msg%
   exit /b 0
 
 :log_ok
   set "_msg=%~1"
-  call echo %C_OK%✔% C_RESET% %_msg%
+  call echo ✔% C_RESET% %_msg%
   exit /b 0
 
 :log_warn
   set "_msg=%~1"
-  call echo %C_WARN%⚠% C_RESET% %_msg%
+  call echo ⚠% C_RESET% %_msg%
   exit /b 0
 
 :log_error
   set "_msg=%~1"
-  call echo %C_ERR%✖% C_RESET% %_msg%
+  call echo ✖% C_RESET% %_msg%
   exit /b 0
 
 :section
   set "_title=%~1"
-  call echo %C_TITLE%%C_BOLD%==^> %_title% %C_RESET%
+  call echo %C_BOLD%==^> %_title% %C_RESET%
   exit /b 0
 
 :group_start
