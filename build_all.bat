@@ -112,14 +112,23 @@ rem ----------------------------------------------------------------------------
 rem
 rem Define path to MS Visual Studio build environment script.
 
-if not defined VCVARSALL (
-  set "VCVARSALL=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat"
+for /f "usebackq tokens=*" %%i in (`vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
+    set VSPATH=%%i
 )
+
+if not defined VSPATH (
+    echo Could not find Visual Studio installation.
+    exit /b 1
+)
+
+set VCVARSALL=%VSPATH%\VC\Auxiliary\Build\vcvarsall.bat
+
 if exist "%VCVARSALL%" (
-  call "%VCVARSALL%" %PLATFORM%
+    echo Using "%VCVARSALL%"
+    call "%VCVARSALL%" %PLATFORM%
 ) else (
-  echo Could not find "%VCVARSALL%"
-  exit /b
+    echo Could not find "%VCVARSALL%"
+    exit /b 1
 )
 
 rem ------------------------------------------------------------------------------
