@@ -29,15 +29,20 @@ on:
 env:
   BUILD_BASE: C:\Development\Apache24\build
   PREFIX: C:\Apache24
-  PLATFORM: ${{ inputs.platform || 'x64' }}
-  BUILD_TYPE: ${{ inputs.build_type || 'Release' }}
   INSTALL_PDB: OFF
 
 jobs:
   build:
-    name: Build on Windows ${{ env.PLATFORM }} (${{ env.BUILD_TYPE }})
+    name: Build on Windows
     runs-on: windows-2022
     timeout-minutes: 360
+
+    env:
+      PLATFORM: ${{ inputs.platform }}
+      BUILD_TYPE: ${{ inputs.build_type }}
+      BUILD_BASE: ${{ env.BUILD_BASE }}
+      PREFIX: ${{ env.PREFIX }}
+      INSTALL_PDB: ${{ env.INSTALL_PDB }}
 
     outputs:
       platform: ${{ steps.outvars.outputs.platform }}
@@ -51,8 +56,8 @@ jobs:
           fetch-depth: 0
 
       - name: Enable long paths (Windows)
-        run: git config --system core.longpaths true
         shell: pwsh
+        run: git config --system core.longpaths true
 
       - name: Install dependencies (CMake, Perl, NASM, 7zip)
         shell: pwsh
@@ -72,8 +77,8 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $srcKey = "apache-src-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
-          $prefixKey = "apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
+          $srcKey = "apache-src-$env:PLATFORM-$env:BUILD_TYPE"
+          $prefixKey = "apache-prefix-$env:PLATFORM-$env:BUILD_TYPE"
           "srcKey=$srcKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "prefixKey=$prefixKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
@@ -94,19 +99,15 @@ jobs:
       - name: Show MSVC
         shell: cmd
         run: |
-          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" ${{ env.PLATFORM }}
+          call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" %PLATFORM%
           where cl
           where nmake
 
       - name: Run build script
         shell: cmd
-        env:
-          PLATFORM: ${{ env.PLATFORM }}
-          BUILD_TYPE: ${{ env.BUILD_TYPE }}
-          BUILD_BASE: ${{ env.BUILD_BASE }}
-          PREFIX: ${{ env.PREFIX }}
-          INSTALL_PDB: ${{ env.INSTALL_PDB }}
         run: |
+          echo Platform=%PLATFORM%
+          echo BuildType=%BUILD_TYPE%
           dir
           call build_all.bat
 
@@ -122,9 +123,9 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $artifact = "Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
-          "platform=${{ env.PLATFORM }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "build_type=${{ env.BUILD_TYPE }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $artifact = "Apache24-$env:PLATFORM-$env:BUILD_TYPE"
+          "platform=$env:PLATFORM" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "build_type=$env:BUILD_TYPE" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "artifact_name=$artifact" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload build prefix
@@ -141,7 +142,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}
+          name: build-logs-${{ steps.outvars.outputs.platform }}-${{ steps.outvars.outputs.build_type }}
           path: |
             C:\Development\Apache24\build\**\CMakeFiles\CMakeOutput.log
             C:\Development\Apache24\build\**\CMakeFiles\CMakeError.log
