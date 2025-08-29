@@ -32,7 +32,7 @@ rem Версии пакетов (должны совпадать с оригин
 set "ZLIB=zlib-1.3.1"
 set "PCRE2=pcre2-10.45"
 set "EXPAT=expat-2.7.1"
-set "OPENSSL=openssl-3.5.1"
+set "OPENSSL=openssl-3.5.2"
 set "LIBXML2=libxml2-2.14.5"
 set "JANSSON=jansson-2.14.1"
 set "BROTLI=brotli-1.1.0"
