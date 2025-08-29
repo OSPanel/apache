@@ -1,16 +1,132 @@
 @echo off
+setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-rem ---------------------------------------------------------------------------
+rem -----------------------------------------------------------------------------
+rem English translation of the top comments (original Russian comments were above)
+rem -----------------------------------------------------------------------------
 rem NEW: Ensure base folder structure exists and download all sources unconditionally
-rem      (не проверяем наличие — считаем, что на диске ничего нет)
-rem ---------------------------------------------------------------------------
+rem      (do not check for presence — assume the disk is empty)
+rem
+rem Base paths
+rem
+rem Create directory structure
+rem
+rem Ensure PowerShell is available (for downloads)
+rem
+rem Package versions (must match the original below)
+rem
+rem Direct links to source archives
+rem
+rem Check 7z presence (if available, use it for faster extraction)
+rem
+rem Unconditionally download and extract all archives into src (without checking presence)
+rem
+rem _fetch_and_unpack
+rem %1 = expected source folder (e.g., zlib-1.3.1)
+rem %2 = URL
+rem %3 = override extracted dir name (optional)
+rem %4 = strip top-level flag (1=yes) (optional)
+rem
+rem After new header
+rem -----------------------------------------------------------------------------
 
-rem Базовые пути
+
+:: -----------------------------------------------------------------------------
+:: Pretty console output helpers (GitHub Actions friendly)
+:: -----------------------------------------------------------------------------
+:: Usage:
+::   call :log_info "message"
+::   call :log_warn "message"
+::   call :log_error "message"
+::   call :group_start "title"
+::   call :group_end
+::
+:: Colors (Windows ANSI via VirtualTerminal) and GitHub Actions groups.
+
+:: Enable ANSI on Windows 10+ console
+for /f "tokens=2 delims=:." %%v in ('ver') do set "_ver=%%v"
+for /f "tokens=1 delims= " %%v in ("%_ver%") do set "_maj=%%v"
+if not defined NO_VT ^
+  if "%_maj%" GEQ "10" (
+    >nul 2>&1 reg query HKCU\Console /v VirtualTerminalLevel || (
+      reg add HKCU\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f >nul 2>&1
+    )
+)
+
+set "C_RESET=\x1b[0m"
+set "C_DIM=\x1b[2m"
+set "C_BOLD=\x1b[1m"
+set "C_INFO=\x1b[36m"
+set "C_OK=\x1b[32m"
+set "C_WARN=\x1b[33m"
+set "C_ERR=\x1b[31m"
+set "C_TITLE=\x1b[95m"
+
+:log_info
+  set "_msg=%~1"
+  call echo %C_INFO%ℹ% C_RESET% %_msg%
+  exit /b 0
+
+:log_ok
+  set "_msg=%~1"
+  call echo %C_OK%✔% C_RESET% %_msg%
+  exit /b 0
+
+:log_warn
+  set "_msg=%~1"
+  call echo %C_WARN%⚠% C_RESET% %_msg%
+  exit /b 0
+
+:log_error
+  set "_msg=%~1"
+  call echo %C_ERR%✖% C_RESET% %_msg%
+  exit /b 0
+
+:section
+  set "_title=%~1"
+  call echo %C_TITLE%%C_BOLD%==^> %_title% %C_RESET%
+  exit /b 0
+
+:group_start
+  set "_g=%~1"
+  if defined GITHUB_ACTIONS (
+    echo ::group::%_g%
+  ) else (
+    call :section "%_g%"
+  )
+  exit /b 0
+
+:group_end
+  if defined GITHUB_ACTIONS (
+    echo ::endgroup::
+  ) else (
+    rem no-op for local console
+  )
+  exit /b 0
+
+:set_output
+  rem GitHub Actions output key=value
+  set "_k=%~1"
+  set "_v=%~2"
+  if defined GITHUB_OUTPUT (
+    >>"%GITHUB_OUTPUT%" echo %_k%=%_v%
+  )
+  exit /b 0
+
+
+:: -----------------------------------------------------------------------------
+:: Begin original script with improved console output
+:: -----------------------------------------------------------------------------
+
+rem NEW: Ensure base folder structure exists and download all sources unconditionally
+rem      (do not check for presence — assume the disk is empty)
+
+rem Base paths
 set "BUILD_BASE=C:\Development\Apache24\build"
 set "PREFIX=C:\Apache24"
 set "_SRC_ROOT=C:\Development\Apache24\src"
 
-rem Создать структуру каталогов
+call :group_start "Initialize folders"
 mkdir "C:\Development" 2>nul
 mkdir "C:\Development\Apache24" 2>nul
 mkdir "C:\Development\Apache24\src" 2>nul
@@ -21,14 +137,18 @@ mkdir "%PREFIX%\lib" 2>nul
 mkdir "%PREFIX%\include" 2>nul
 mkdir "%PREFIX%\conf" 2>nul
 mkdir "%PREFIX%\cgi-bin" 2>nul
+call :log_ok "Folder structure prepared"
+call :group_end
 
-rem Убедиться, что PowerShell доступен (для загрузок)
+call :group_start "Check PowerShell availability"
 where powershell >nul 2>&1 || (
-  echo PowerShell not found. Please ensure PowerShell is installed and in PATH.
+  call :log_error "PowerShell not found. Please ensure PowerShell is installed and in PATH."
   exit /b 1
 )
+call :log_ok "PowerShell is available"
+call :group_end
 
-rem Версии пакетов (должны совпадать с оригиналом ниже)
+rem Package versions (must match the original below)
 set "ZLIB=zlib-1.3.1"
 set "PCRE2=pcre2-10.45"
 set "EXPAT=expat-2.7.1"
@@ -45,7 +165,7 @@ set "CURL=curl-8.15.0"
 set "HTTPD=httpd-2.4.65"
 set "MOD_FCGID=mod_fcgid-2.3.9"
 
-rem Прямые ссылки на архивы исходников
+rem Direct links to source archives
 set "URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz"
 set "URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz"
 set "URL_EXPAT=https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz"
@@ -62,10 +182,10 @@ set "URL_CURL=https://curl.se/download/curl-8.15.0.tar.xz"
 set "URL_HTTPD=https://downloads.apache.org/httpd/httpd-2.4.65.tar.bz2"
 set "URL_MOD_FCGID=https://downloads.apache.org/httpd/mod_fcgid/mod_fcgid-2.3.9.tar.gz"
 
-rem Проверка наличия 7z (если есть, используем для распаковки быстрее)
+rem Check 7z presence (if available, use it for faster extraction)
 where 7z >nul 2>&1 && (set "SEVENZIP_AVAILABLE=1") || (set "SEVENZIP_AVAILABLE=0")
 
-rem Безусловно загрузить и распаковать все архивы в src (не проверяя наличие)
+rem Unconditionally download and extract all archives in src (without checking presence)
 call :_fetch_and_unpack "%ZLIB%"       "%URL_ZLIB%"
 call :_fetch_and_unpack "%PCRE2%"      "%URL_PCRE2%"
 call :_fetch_and_unpack "%EXPAT%"      "%URL_EXPAT%"
@@ -84,18 +204,16 @@ call :_fetch_and_unpack "%MOD_FCGID%"  "%URL_MOD_FCGID%"
 
 goto :_after_new_header
 
+
 :_fetch_and_unpack
-rem %1 = ожидаемая папка исходников (например, zlib-1.3.1)
-rem %2 = URL
-rem %3 = override extracted dir name (optional)
-rem %4 = strip top-level flag (1=yes) (optional)
 set "_want_dir=%~1"
 set "_url=%~2"
 set "_override=%~3"
 set "_strip=%~4"
 set "_dest_dir=%_SRC_ROOT%\%_want_dir%"
 
-echo Downloading: %_url%
+call :group_start "Download %_want_dir%"
+call :log_info "URL: %_url%"
 set "_tmp=%TEMP%\dl-%RANDOM%-%RANDOM%"
 mkdir "%_tmp%" >nul 2>&1
 
@@ -104,11 +222,15 @@ for %%F in ("%_url%") do set "_fname=%_tmp%\%%~nxF"
 powershell -NoLogo -NoProfile -Command ^
   "try {Invoke-WebRequest -Uri '%_url%' -OutFile '%_fname%' -UseBasicParsing; exit 0} catch {Write-Error $_; exit 1}"
 if errorlevel 1 (
-  echo Download failed: %_url%
+  call :log_error "Download failed: %_url%"
   rmdir /s /q "%_tmp%" >nul 2>&1
+  call :group_end
   exit /b 1
 )
+call :log_ok "Downloaded to %_fname%"
+call :group_end
 
+call :group_start "Extract %_want_dir%"
 mkdir "%_tmp%\x" >nul 2>&1
 
 set "_det="
@@ -143,8 +265,9 @@ mkdir "%_SRC_ROOT%" 2>nul
 
 if "%_strip%"=="1" (
   if not defined _top (
-    echo Extraction failed for %_want_dir%
+    call :log_error "Extraction failed for %_want_dir%"
     rmdir /s /q "%_tmp%" >nul 2>&1
+    call :group_end
     exit /b 1
   )
   if /i "%_top%"=="%_want_dir%" (
@@ -163,16 +286,25 @@ if "%_strip%"=="1" (
 )
 
 if not exist "%_dest_dir%" (
-  echo Failed to prepare source folder: %_dest_dir%
+  call :log_error "Failed to prepare source folder: %_dest_dir%"
   rmdir /s /q "%_tmp%" >nul 2>&1
+  call :group_end
   exit /b 1
 )
 
-echo Source ready: %_dest_dir%
+call :log_ok "Source ready: %_dest_dir%"
 rmdir /s /q "%_tmp%" >nul 2>&1
+call :group_end
 exit /b 0
 
+
 :_after_new_header
+
+rem The remainder of the original (build) script follows unchanged.
+rem To keep the response focused, only the header and fetch/unpack section were enhanced
+rem with English comments and modern console output suitable for GitHub Actions.
+
+endlocal
 
 rem @(#)build_all.bat 3.9 - 2025-08-11 tangent
 rem
