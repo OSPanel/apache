@@ -26,7 +26,6 @@ on:
       - 'build_all.bat'
       - '.github/workflows/**'
 
-# Global constants only; do not reference env here via expressions
 env:
   BUILD_BASE: C:\Development\Apache24\build
   PREFIX: C:\Apache24
@@ -38,11 +37,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 360
 
-    # Use job-level env; don't try to reference env within expressions here
     env:
+      # Fallbacks for push/PR where inputs.* are undefined
       PLATFORM: ${{ inputs.platform }}
       BUILD_TYPE: ${{ inputs.build_type }}
-      # Use the literal values defined at top-level env (injected automatically)
       BUILD_BASE: C:\Development\Apache24\build
       PREFIX: C:\Apache24
       INSTALL_PDB: OFF
@@ -58,6 +56,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Ensure PLATFORM/BUILD_TYPE defaults for push/PR
+        id: ensure-defaults
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:PLATFORM -or $env:PLATFORM -eq '') { "$([string]::Format('PLATFORM={0}','x64'))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          if (-not $env:BUILD_TYPE -or $env:BUILD_TYPE -eq '') { "$([string]::Format('BUILD_TYPE={0}','Release'))" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8 }
+          "Using PLATFORM=$env:PLATFORM, BUILD_TYPE=$env:BUILD_TYPE"
+
       - name: Enable long paths (Windows)
         shell: pwsh
         run: git config --system core.longpaths true
@@ -67,13 +74,22 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           choco feature enable -n allowGlobalConfirmation
-          choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress
-          choco install strawberryperl --no-progress
-          choco install nasm --no-progress
-          choco install 7zip --no-progress
+          choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
+          choco install strawberryperl --no-progress --yes
+          # Prefer nasm.portable for immediate availability on PATH
+          choco install nasm.portable --no-progress --yes
+          choco install 7zip --no-progress --yes
+          # Verify tools and adjust PATH for current session if needed
           cmake --version
           perl -v | Out-Null
+          if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
+            $chocoBin = 'C:\ProgramData\chocolatey\bin'
+            if (Test-Path (Join-Path $chocoBin 'nasm.exe')) {
+              $env:PATH = "$chocoBin;$env:PATH"
+            }
+          }
           nasm -v
+          where nasm
 
       - name: Prepare cache keys
         id: cache-key
@@ -118,7 +134,7 @@ jobs:
           call build_all.bat
 
       - name: Save install prefix to cache (post-build)
-        if: always()
+        if: success()
         uses: actions/cache/save@v4
         with:
           path: C:\Apache24
@@ -126,9 +142,9 @@ jobs:
 
       - name: Prepare outputs
         id: outvars
+        if: always()
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           $artifact = "Apache24-$env:PLATFORM-$env:BUILD_TYPE"
           "platform=$env:PLATFORM" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "build_type=$env:BUILD_TYPE" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
