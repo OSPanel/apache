@@ -38,7 +38,6 @@ jobs:
     timeout-minutes: 360
 
     env:
-      # Fallbacks for push/PR where inputs.* are undefined
       PLATFORM: ${{ inputs.platform }}
       BUILD_TYPE: ${{ inputs.build_type }}
       BUILD_BASE: C:\Development\Apache24\build
@@ -79,21 +78,17 @@ jobs:
           choco install nasm --no-progress --yes
           choco install 7zip --no-progress --yes
           
-          # Refresh environment variables to pick up new PATH entries
           $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
           
-          # Verify tools
           cmake --version
           perl -v | Out-Null
           
-          # Check if nasm is available, if not try common installation paths
           if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
             $possiblePaths = @(
               'C:\ProgramData\chocolatey\bin',
               'C:\ProgramData\chocolatey\lib\nasm\tools',
               'C:\Program Files\NASM'
             )
-            
             foreach ($path in $possiblePaths) {
               $nasmPath = Join-Path $path 'nasm.exe'
               if (Test-Path $nasmPath) {
@@ -107,30 +102,6 @@ jobs:
           
           nasm -v
           where nasm
-
-      - name: Prepare cache keys
-        id: cache-key
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $srcKey = "apache-src-$env:PLATFORM-$env:BUILD_TYPE"
-          $prefixKey = "apache-prefix-$env:PLATFORM-$env:BUILD_TYPE"
-          "srcKey=$srcKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-          "prefixKey=$prefixKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-
-      - name: Cache extracted sources
-        id: cache-src
-        uses: actions/cache@v4
-        with:
-          path: C:\Development\Apache24\src
-          key: ${{ steps.cache-key.outputs.srcKey }}
-
-      - name: Cache install prefix (restore only)
-        id: cache-prefix
-        uses: actions/cache/restore@v4
-        with:
-          path: C:\Apache24
-          key: ${{ steps.cache-key.outputs.prefixKey }}
 
       - name: Show MSVC
         shell: cmd
@@ -149,13 +120,6 @@ jobs:
           echo INSTALL_PDB=%INSTALL_PDB%
           dir
           call build_all.bat
-
-      - name: Save install prefix to cache (post-build)
-        if: success()
-        uses: actions/cache/save@v4
-        with:
-          path: C:\Apache24
-          key: ${{ steps.cache-key.outputs.prefixKey }}-${{ github.run_id }}
 
       - name: Prepare outputs
         id: outvars
