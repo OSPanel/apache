@@ -49,7 +49,7 @@ rem Прямые ссылки на архивы исходников
 set "URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz"
 set "URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz"
 set "URL_EXPAT=https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz"
-set "URL_OPENSSL=https://www.openssl.org/source/openssl-3.5.1.tar.gz"
+set "URL_OPENSSL=https://www.openssl.org/source/openssl-3.5.2.tar.gz"
 set "URL_LIBXML2=https://download.gnome.org/sources/libxml2/2.14/libxml2-2.14.5.tar.xz"
 set "URL_JANSSON=https://github.com/akheron/jansson/releases/download/v2.14.1/jansson-2.14.1.tar.gz"
 set "URL_BROTLI=https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
