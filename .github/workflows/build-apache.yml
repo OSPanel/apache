@@ -26,6 +26,7 @@ on:
       - 'build_all.bat'
       - '.github/workflows/**'
 
+# Global constants only; do not reference env here via expressions
 env:
   BUILD_BASE: C:\Development\Apache24\build
   PREFIX: C:\Apache24
@@ -37,12 +38,14 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 360
 
+    # Use job-level env; don't try to reference env within expressions here
     env:
       PLATFORM: ${{ inputs.platform }}
       BUILD_TYPE: ${{ inputs.build_type }}
-      BUILD_BASE: ${{ env.BUILD_BASE }}
-      PREFIX: ${{ env.PREFIX }}
-      INSTALL_PDB: ${{ env.INSTALL_PDB }}
+      # Use the literal values defined at top-level env (injected automatically)
+      BUILD_BASE: C:\Development\Apache24\build
+      PREFIX: C:\Apache24
+      INSTALL_PDB: OFF
 
     outputs:
       platform: ${{ steps.outvars.outputs.platform }}
@@ -108,6 +111,9 @@ jobs:
         run: |
           echo Platform=%PLATFORM%
           echo BuildType=%BUILD_TYPE%
+          echo BUILD_BASE=%BUILD_BASE%
+          echo PREFIX=%PREFIX%
+          echo INSTALL_PDB=%INSTALL_PDB%
           dir
           call build_all.bat
 
