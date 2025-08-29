@@ -2,15 +2,13 @@
 
 rem ---------------------------------------------------------------------------
 rem NEW: Ensure base folder structure exists and download all sources unconditionally
-rem      (не проверяем наличие — считаем, что на диске ничего нет)
+rem      (do not check for presence — assume the disk is empty)
 rem ---------------------------------------------------------------------------
 
-rem Базовые пути
 set "BUILD_BASE=C:\Development\Apache24\build"
 set "PREFIX=C:\Apache24"
 set "_SRC_ROOT=C:\Development\Apache24\src"
 
-rem Создать структуру каталогов
 mkdir "C:\Development" 2>nul
 mkdir "C:\Development\Apache24" 2>nul
 mkdir "C:\Development\Apache24\src" 2>nul
@@ -22,13 +20,11 @@ mkdir "%PREFIX%\include" 2>nul
 mkdir "%PREFIX%\conf" 2>nul
 mkdir "%PREFIX%\cgi-bin" 2>nul
 
-rem Убедиться, что PowerShell доступен (для загрузок)
 where powershell >nul 2>&1 || (
   echo PowerShell not found. Please ensure PowerShell is installed and in PATH.
   exit /b 1
 )
 
-rem Версии пакетов (должны совпадать с оригиналом ниже)
 set "ZLIB=zlib-1.3.1"
 set "PCRE2=pcre2-10.45"
 set "EXPAT=expat-2.7.1"
@@ -45,7 +41,6 @@ set "CURL=curl-8.15.0"
 set "HTTPD=httpd-2.4.65"
 set "MOD_FCGID=mod_fcgid-2.3.9"
 
-rem Прямые ссылки на архивы исходников
 set "URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz"
 set "URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz"
 set "URL_EXPAT=https://github.com/libexpat/libexpat/releases/download/R_2_7_1/expat-2.7.1.tar.xz"
@@ -62,10 +57,8 @@ set "URL_CURL=https://curl.se/download/curl-8.15.0.tar.xz"
 set "URL_HTTPD=https://downloads.apache.org/httpd/httpd-2.4.65.tar.bz2"
 set "URL_MOD_FCGID=https://downloads.apache.org/httpd/mod_fcgid/mod_fcgid-2.3.9.tar.gz"
 
-rem Проверка наличия 7z (если есть, используем для распаковки быстрее)
 where 7z >nul 2>&1 && (set "SEVENZIP_AVAILABLE=1") || (set "SEVENZIP_AVAILABLE=0")
 
-rem Безусловно загрузить и распаковать все архивы в src (не проверяя наличие)
 call :_fetch_and_unpack "%ZLIB%"       "%URL_ZLIB%"
 call :_fetch_and_unpack "%PCRE2%"      "%URL_PCRE2%"
 call :_fetch_and_unpack "%EXPAT%"      "%URL_EXPAT%"
@@ -85,7 +78,7 @@ call :_fetch_and_unpack "%MOD_FCGID%"  "%URL_MOD_FCGID%"
 goto :_after_new_header
 
 :_fetch_and_unpack
-rem %1 = ожидаемая папка исходников (например, zlib-1.3.1)
+rem %1 = expected src folder (eg., zlib-1.3.1)
 rem %2 = URL
 rem %3 = override extracted dir name (optional)
 rem %4 = strip top-level flag (1=yes) (optional)
