@@ -39,16 +39,20 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 360
 
+    outputs:
+      platform: ${{ steps.outvars.outputs.platform }}
+      build_type: ${{ steps.outvars.outputs.build_type }}
+      artifact_name: ${{ steps.outvars.outputs.artifact_name }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: false
 
       - name: Enable long paths (Windows)
-        run: |
-          git config --system core.longpaths true
+        run: git config --system core.longpaths true
+        shell: pwsh
 
       - name: Install dependencies (CMake, Perl, NASM, 7zip)
         shell: pwsh
@@ -59,41 +63,35 @@ jobs:
           choco install strawberryperl --no-progress
           choco install nasm --no-progress
           choco install 7zip --no-progress
+          cmake --version
+          perl -v | Out-Null
+          nasm -v
 
-      - name: Prepare sources cache key
+      - name: Prepare cache keys
         id: cache-key
         shell: pwsh
         run: |
-          # Cache all extracted sources under C:\Development\Apache24\src
-          $key = "apache-src-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
-          "key=$key" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $ErrorActionPreference = 'Stop'
+          $srcKey = "apache-src-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
+          $prefixKey = "apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
+          "srcKey=$srcKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "prefixKey=$prefixKey" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Cache extracted sources
         id: cache-src
         uses: actions/cache@v4
         with:
           path: C:\Development\Apache24\src
-          key: ${{ steps.cache-key.outputs.key }}
+          key: ${{ steps.cache-key.outputs.srcKey }}
 
-      - name: Cache build outputs (C:\Apache24)
+      - name: Cache install prefix (restore only)
         id: cache-prefix
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: C:\Apache24
-          key: apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}-${{ github.run_id }}
-          restore-keys: |
-            apache-prefix-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}-
+          key: ${{ steps.cache-key.outputs.prefixKey }}
 
-      - name: Show tool versions
-        shell: cmd
-        run: |
-          cmake --version
-          perl --version
-          nasm -v
-          nmake /?
-          cl 2>nul || ver
-
-      - name: Configure MSVC environment
+      - name: Show MSVC
         shell: cmd
         run: |
           call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvarsall.bat" ${{ env.PLATFORM }}
@@ -109,32 +107,35 @@ jobs:
           PREFIX: ${{ env.PREFIX }}
           INSTALL_PDB: ${{ env.INSTALL_PDB }}
         run: |
-          rem Ensure the script is in the workspace
           dir
           call build_all.bat
 
-      - name: Package artifacts
+      - name: Save install prefix to cache (post-build)
         if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: C:\Apache24
+          key: ${{ steps.cache-key.outputs.prefixKey }}-${{ github.run_id }}
+
+      - name: Prepare outputs
+        id: outvars
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $dst = "$env:RUNNER_TEMP\Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}.zip"
-          if (Test-Path "${{ env.PREFIX }}") {
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            if (Test-Path $dst) { Remove-Item $dst -Force }
-            [System.IO.Compression.ZipFile]::CreateFromDirectory("${{ env.PREFIX }}", $dst)
-            Write-Host "Packaged to $dst"
-          } else {
-            Write-Host "Nothing to package; prefix not found."
-          }
+          $artifact = "Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}"
+          "platform=${{ env.PLATFORM }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "build_type=${{ env.BUILD_TYPE }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "artifact_name=$artifact" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload build prefix
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Apache24-${{ env.PLATFORM }}-${{ env.BUILD_TYPE }}
-          path: |
-            C:\Apache24\**
+          name: ${{ steps.outvars.outputs.artifact_name }}
+          path: C:\Apache24\**
+          if-no-files-found: warn
+          compression-level: 6
+          retention-days: 14
 
       - name: Upload logs
         if: failure()
@@ -145,6 +146,7 @@ jobs:
             C:\Development\Apache24\build\**\CMakeFiles\CMakeOutput.log
             C:\Development\Apache24\build\**\CMakeFiles\CMakeError.log
             C:\Development\Apache24\build\**\*.log
+          if-no-files-found: ignore
 
   release:
     name: Draft GitHub Release
@@ -153,22 +155,22 @@ jobs:
     runs-on: windows-2022
     permissions:
       contents: write
+
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: Apache24-${{ needs.build.outputs.platform || 'x64' }}-${{ needs.build.outputs.build_type || 'Release' }}
+          name: ${{ needs.build.outputs.artifact_name }}
           path: dist
 
       - name: Create release archive
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $zip = "Apache24-${{ github.run_number }}-${{ github.sha.Substring(0,7) }}.zip"
+          $zip = "Apache24-${{ needs.build.outputs.platform }}-${{ needs.build.outputs.build_type }}-${{ github.run_number }}.zip"
           if (Test-Path "dist") {
             if (Test-Path $zip) { Remove-Item $zip -Force }
-            Add-Type -AssemblyName System.IO.Compression.FileSystem
-            [System.IO.Compression.ZipFile]::CreateFromDirectory("dist", $zip)
+            Compress-Archive -Path "dist\*" -DestinationPath $zip -CompressionLevel Optimal
             Write-Host "Zipped: $zip"
           } else {
             Write-Host "dist folder not found; skipping."
@@ -182,7 +184,7 @@ jobs:
           name: "Apache24 Build #${{ github.run_number }}"
           body: |
             Automated build for commit ${{ github.sha }}.
-            Platform: ${{ env.PLATFORM }}
-            Build Type: ${{ env.BUILD_TYPE }}
+            Platform: ${{ needs.build.outputs.platform }}
+            Build Type: ${{ needs.build.outputs.build_type }}
           files: |
             Apache24-*.zip
