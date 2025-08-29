@@ -76,24 +76,18 @@ jobs:
           choco feature enable -n allowGlobalConfirmation
           choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
           choco install strawberryperl --no-progress --yes
-          # Use nasm.portable, but also create a symlink in Chocolatey bin to ensure PATH visibility
+          # Prefer nasm.portable for immediate availability on PATH
           choco install nasm.portable --no-progress --yes
           choco install 7zip --no-progress --yes
-
-          # Ensure nasm.exe is discoverable
-          $chocoBin = 'C:\ProgramData\chocolatey\bin'
-          $nasmExe  = Join-Path $chocoBin 'nasm.exe'
-          if (-not (Test-Path $nasmExe)) {
-            # Portable package sometimes installs under tools\nasm\...
-            $found = Get-ChildItem "C:\ProgramData\chocolatey\lib\nasm.portable\tools" -Recurse -Filter nasm.exe | Select-Object -First 1
-            if ($found) {
-              Copy-Item $found.FullName $nasmExe -Force
-            }
-          }
-
-          # Verify installs
+          # Verify tools and adjust PATH for current session if needed
           cmake --version
           perl -v | Out-Null
+          if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
+            $chocoBin = 'C:\ProgramData\chocolatey\bin'
+            if (Test-Path (Join-Path $chocoBin 'nasm.exe')) {
+              $env:PATH = "$chocoBin;$env:PATH"
+            }
+          }
           nasm -v
           where nasm
 
