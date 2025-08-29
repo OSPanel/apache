@@ -106,7 +106,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ env.PLATFORM }}
-          toolset: 143
 
       - name: Show MSVC
         shell: cmd
