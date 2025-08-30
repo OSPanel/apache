@@ -70,7 +70,7 @@ set "URL_NGHTTP2=https://files.ospanel.io/apache/nghttp2-1.66.0.tar.xz"
 set "URL_CURL=https://files.ospanel.io/apache/curl-8.15.0.tar.xz"
 set "URL_HTTPD=https://files.ospanel.io/apache/httpd-2.4.65.tar.bz2"
 set "URL_MOD_FCGID=https://files.ospanel.io/apache/mod_fcgid-2.3.9.tar.gz"
-set "URL_BZIP2=https://files.ospanel.io/apache/bzip2-1.0.8.tar.gz"
+set "URL_BZIP2=https://files.ospanel.io/apache/bzip2-1.1.0.zip"
 
 where 7z >nul 2>&1 && (set "SEVENZIP_AVAILABLE=1") || (set "SEVENZIP_AVAILABLE=0")
 
