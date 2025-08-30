@@ -182,7 +182,7 @@ build_package() {
         -DCMAKE_IGNORE_PATH="/c/Program Files/OpenSSL" \
         -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" \
         -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" \
-        -DCMAKE_C_FLAGS="/DFD_SETSIZE=32768" \
+        -DCMAKE_CXX_FLAGS="-DFD_SETSIZE=32768" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -S "$src_dir" -B .; then
         log_error "CMake configuration failed for $package"
