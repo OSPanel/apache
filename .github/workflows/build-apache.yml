@@ -28,7 +28,6 @@ on:
         type: choice
         options:
           - x64
-          - x86
       install_pdb:
         description: 'Install PDB files'
         required: true
