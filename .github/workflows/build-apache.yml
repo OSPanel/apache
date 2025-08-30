@@ -1,3 +1,4 @@
+# .github/workflows/build-apache-msys2.yml
 name: Build Apache HTTPD Stack (MSYS2 UCRT64 + VS17)
 
 on:
@@ -14,7 +15,7 @@ on:
         type: choice
         required: true
         default: x64
-        options: [x64]  # MSYS2 UCRT64 в этом примере только x64
+        options: [x64]
 
 env:
   BUILD_BASE: C:\Development\Apache24\build
@@ -23,7 +24,7 @@ env:
 
 jobs:
   build:
-    name: Build Apache with MSYS2 UCRT64 + VS17
+    name: Build Apache with MSYS2 (bash) + VS17 (MSVC)
     runs-on: windows-2022
     timeout-minutes: 360
 
@@ -58,7 +59,7 @@ jobs:
         shell: pwsh
         run: git config --system core.longpaths true
 
-      - name: Install MSYS2
+      - name: Install MSYS2 (UCRT64) base tools
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -66,6 +67,7 @@ jobs:
           install: >-
             base-devel
             git
+            curl
             tar
             gzip
             xz
@@ -74,25 +76,16 @@ jobs:
             nasm
             zip
             p7zip
-          path-type: minimal
 
-      - name: Show MSYS2 env
-        shell: msys2 {0}
-        run: |
-          uname -a
-          which bash
-          which tar
-          which perl
-          which 7z || true
-          echo MSYSTEM=$MSYSTEM
-
-      - name: Install CMake (system) and 7zip (Windows)
+      - name: Install CMake (Windows) and 7-Zip (Windows)
         shell: pwsh
         run: |
           choco feature enable -n allowGlobalConfirmation
           choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
           choco install 7zip --no-progress --yes
+          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
           cmake --version
+          7z -h | Out-Null
 
       - name: Setup MSVC 2022 (VS17, toolset v143)
         uses: ilammy/msvc-dev-cmd@v1
@@ -106,7 +99,7 @@ jobs:
           where cl
           where nmake
 
-      - name: Run build script under MSYS2 bash (using MSVC toolchain)
+      - name: Run build script (MSYS2 bash + MSVC)
         shell: msys2 {0}
         env:
           PLATFORM: ${{ env.PLATFORM }}
@@ -115,20 +108,27 @@ jobs:
           PREFIX: ${{ env.PREFIX }}
           INSTALL_PDB: ${{ env.INSTALL_PDB }}
         run: |
+          set -euo pipefail
           echo "MSYSTEM=$MSYSTEM"
-          echo "PATH=$PATH"
-          # Добавим Windows tools в PATH (чтобы cmake/nmake/cl были видны внутри MSYS2 env)
-          winpath() { powershell.exe -NoLogo -NoProfile -Command '[System.Environment]::GetEnvironmentVariable("PATH","Machine")'; }
-          export PATH="/c/Windows/System32:/c/Windows:${PATH}:$(winpath | tr ';' ':' | sed 's#\\#/#g')"
+          echo "Using bash: $(which bash)"
+          echo "Using tar:  $(which tar)"
+          echo "Using perl: $(which perl)"
+          echo "Using nasm: $(which nasm)"; nasm -v
 
-          # Проверим инструменты
+          # Добавляем Windows PATH внутрь MSYS2, чтобы видеть cmake, cl, nmake, 7z
+          WINPATH="$(/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoLogo -NoProfile -Command '[System.Environment]::GetEnvironmentVariable(\"PATH\",\"Machine\")' | tr -d '\r')"
+          export PATH="/c/Windows/system32:/c/Windows:/c/Program Files/CMake/bin:/c/Program Files/7-Zip:$(echo "$WINPATH" | tr ';' ':' | sed 's#\\#/#g'):$PATH"
+
+          echo "cl location via cmd:"
           cmd.exe /c "where cl"
+          echo "nmake location via cmd:"
           cmd.exe /c "where nmake"
-          cmd.exe /c "cmake --version"
+          echo "cmake version:"
+          cmake --version
 
-          # Запустим .bat напрямую через cmd, чтобы он остался совместим
-          cmd.exe /c ^
-            "set PLATFORM=%PLATFORM% && set BUILD_TYPE=%BUILD_TYPE% && set BUILD_BASE=%BUILD_BASE% && set PREFIX=%PREFIX% && set INSTALL_PDB=%INSTALL_PDB% && call build_all.bat"
+          # Запуск bash-скрипта сборки
+          chmod +x ./build_all.sh
+          ./build_all.sh
 
       - name: Prepare outputs
         id: outvars
