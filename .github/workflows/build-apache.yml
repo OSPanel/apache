@@ -1,4 +1,4 @@
-name: Build Apache HTTPD Stack (Windows VS17)
+name: Build Apache HTTPD Stack (MSYS2 UCRT64 + VS17)
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ on:
         type: choice
         required: true
         default: x64
-        options: [x64, x86]
+        options: [x64]  # MSYS2 UCRT64 в этом примере только x64
 
 env:
   BUILD_BASE: C:\Development\Apache24\build
@@ -23,7 +23,7 @@ env:
 
 jobs:
   build:
-    name: Build Apache with VS17 (MSVC 2022)
+    name: Build Apache with MSYS2 UCRT64 + VS17
     runs-on: windows-2022
     timeout-minutes: 360
 
@@ -58,39 +58,41 @@ jobs:
         shell: pwsh
         run: git config --system core.longpaths true
 
-      - name: Install dependencies (CMake, Perl, NASM, 7zip)
+      - name: Install MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            base-devel
+            git
+            tar
+            gzip
+            xz
+            unzip
+            perl
+            nasm
+            zip
+            p7zip  # 7z в MSYS2
+          path-type: minimal
+
+      - name: Show MSYS2 env
+        shell: msys2 {0}
+        run: |
+          uname -a
+          which bash
+          which tar
+          which perl
+          which 7z || true
+          echo MSYSTEM=$MSYSTEM
+
+      - name: Install CMake (system) and 7zip (Windows)
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
           choco feature enable -n allowGlobalConfirmation
           choco install cmake --installargs "ADD_CMAKE_TO_PATH=System" --no-progress --yes
-          choco install strawberryperl --no-progress --yes
-          choco install nasm --no-progress --yes
           choco install 7zip --no-progress --yes
-          
-          $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
           cmake --version
-          perl -v | Out-Null
-          
-          if (-not (Get-Command nasm -ErrorAction SilentlyContinue)) {
-            $possiblePaths = @(
-              'C:\ProgramData\chocolatey\bin',
-              'C:\ProgramData\chocolatey\lib\nasm\tools',
-              'C:\Program Files\NASM'
-            )
-            foreach ($path in $possiblePaths) {
-              $nasmPath = Join-Path $path 'nasm.exe'
-              if (Test-Path $nasmPath) {
-                $env:PATH = "$path;$env:PATH"
-                "PATH=$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-                Write-Host "Added $path to PATH"
-                break
-              }
-            }
-          }
-          
-          nasm -v
-          where nasm
 
       - name: Setup MSVC 2022 (VS17, toolset v143)
         uses: ilammy/msvc-dev-cmd@v1
@@ -104,16 +106,29 @@ jobs:
           where cl
           where nmake
 
-      - name: Run build script
-        shell: cmd
+      - name: Run build script under MSYS2 bash (using MSVC toolchain)
+        shell: msys2 {0}
+        env:
+          PLATFORM: ${{ env.PLATFORM }}
+          BUILD_TYPE: ${{ env.BUILD_TYPE }}
+          BUILD_BASE: ${{ env.BUILD_BASE }}
+          PREFIX: ${{ env.PREFIX }}
+          INSTALL_PDB: ${{ env.INSTALL_PDB }}
         run: |
-          echo Platform=%PLATFORM%
-          echo BuildType=%BUILD_TYPE%
-          echo BUILD_BASE=%BUILD_BASE%
-          echo PREFIX=%PREFIX%
-          echo INSTALL_PDB=%INSTALL_PDB%
-          dir
-          call build_all.bat
+          echo "MSYSTEM=$MSYSTEM"
+          echo "PATH=$PATH"
+          # Добавим Windows tools в PATH (чтобы cmake/nmake/cl были видны внутри MSYS2 env)
+          winpath() { powershell.exe -NoLogo -NoProfile -Command '[System.Environment]::GetEnvironmentVariable("PATH","Machine")'; }
+          export PATH="/c/Windows/System32:/c/Windows:${PATH}:$(winpath | tr ';' ':' | sed 's#\\#/#g')"
+
+          # Проверим инструменты
+          cmd.exe /c "where cl"
+          cmd.exe /c "where nmake"
+          cmd.exe /c "cmake --version"
+
+          # Запустим .bat напрямую через cmd, чтобы он остался совместим
+          cmd.exe /c ^
+            "set PLATFORM=%PLATFORM% && set BUILD_TYPE=%BUILD_TYPE% && set BUILD_BASE=%BUILD_BASE% && set PREFIX=%PREFIX% && set INSTALL_PDB=%INSTALL_PDB% && call build_all.bat"
 
       - name: Prepare outputs
         id: outvars
