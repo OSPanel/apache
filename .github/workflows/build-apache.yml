@@ -80,8 +80,6 @@ jobs:
         include:
           - platform: x64
             msystem: MINGW64
-          - platform: x86
-            msystem: MINGW32
     
     defaults:
       run:
