@@ -180,8 +180,6 @@ build_package() {
     # Configure with CMake
     if ! cmake -G "MSYS Makefiles" $cmake_opts \
         -DCMAKE_IGNORE_PATH="/c/Program Files/OpenSSL" \
-        -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" \
-        -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" \
         -DCMAKE_CXX_FLAGS="-DFD_SETSIZE=32768" \
         -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -S "$src_dir" -B .; then
