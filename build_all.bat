@@ -39,6 +39,7 @@ set "NGHTTP2=nghttp2-1.66.0"
 set "CURL=curl-8.15.0"
 set "HTTPD=httpd-2.4.65"
 set "MOD_FCGID=mod_fcgid-2.3.9"
+set "BZIP2=bzip2-1.0.8"
 
 set "URL_ZLIB=https://zlib.net/zlib-1.3.1.tar.gz"
 set "URL_PCRE2=https://github.com/PCRE2Project/pcre2/releases/download/pcre2-10.45/pcre2-10.45.tar.gz"
@@ -69,6 +70,7 @@ set "URL_NGHTTP2=https://files.ospanel.io/apache/nghttp2-1.66.0.tar.xz"
 set "URL_CURL=https://files.ospanel.io/apache/curl-8.15.0.tar.xz"
 set "URL_HTTPD=https://files.ospanel.io/apache/httpd-2.4.65.tar.bz2"
 set "URL_MOD_FCGID=https://files.ospanel.io/apache/mod_fcgid-2.3.9.tar.gz"
+set "URL_BZIP2=https://files.ospanel.io/apache/bzip2-1.0.8.tar.gz"
 
 where 7z >nul 2>&1 && (set "SEVENZIP_AVAILABLE=1") || (set "SEVENZIP_AVAILABLE=0")
 
@@ -86,6 +88,7 @@ call :_fetch_and_unpack "%NGHTTP2%"    "%URL_NGHTTP2%"
 call :_fetch_and_unpack "%CURL%"       "%URL_CURL%"
 call :_fetch_and_unpack "%HTTPD%"      "%URL_HTTPD%"
 call :_fetch_and_unpack "%MOD_FCGID%"  "%URL_MOD_FCGID%"
+call :_fetch_and_unpack "%BZIP2%"      "%URL_BZIP2%"
 
 goto :_after_new_header
 
@@ -303,6 +306,19 @@ call :check_package_source %ZLIB%
 if !STATUS! == 0 (
   set "ZLIB_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DBUILD_SHARED_LIBS=ON -DINSTALL_PKGCONFIG_DIR=%PREFIX%/lib/pkgconfig"
   call :build_package %ZLIB% "!ZLIB_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
+)
+
+rem ------------------------------------------------------------------------------
+rem
+rem BZIP2
+
+rem Check for package and switch to source folder.
+rem
+call :check_package_source %BZIP2%
+
+if !STATUS! == 0 (
+  set "BZIP2_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DBUILD_SHARED_LIBS=ON -DINSTALL_PKGCONFIG_DIR=%PREFIX%/lib/pkgconfig"
+  call :build_package %BZIP2% "!BZIP2_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
 )
 
 rem ------------------------------------------------------------------------------
