@@ -470,7 +470,7 @@ rem
 call :check_package_source %APR-UTIL%
 
 if !STATUS! == 0 (
-  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DAPU_HAVE_CRYPTO=ON -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%"
+  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%"
 
   call :build_package %APR-UTIL% "!APR-UTIL_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
 )
@@ -551,18 +551,6 @@ rem
 call :check_package_source %HTTPD%
 
 if !STATUS! == 0 (
-  rem Patch CMakeLists.txt to build ApacheMonitor.
-  rem
-  perl -pi.bak -e ^" ^
-    s~(^^# ^)(.+ApacheMonitor.+^)~${2}~; ^
-    ^" CMakeLists.txt
-
-  rem Patch ApacheMonitor.rc to comment out MANIFEST file reference.
-  rem
-  perl -pi.bak -e ^" ^
-    s~(^^CREATEPROCESS_MANIFEST^)~// ${1}~; ^
-    ^" support\win32\ApacheMonitor.rc
-
   rem Patch CMakeLists.txt to build WinTTY console binary.
   rem
   perl -pi.bak -e ^" ^
@@ -575,19 +563,6 @@ if !STATUS! == 0 (
     SET_TARGET_PROPERTIES(WinTTY PROPERTIES LINK_FLAGS \x22/subsystem:console\x22^)\n^
     ~m; ^
     ^" CMakeLists.txt
-
-  rem Check if we're building HTTPD 2.4.62 and if so patch mod_rewrite.c
-  rem
-  if not x%HTTPD:2.4.62=% == x%HTTPD% (
-    rem Patch mod_rewrite.c to apply Eric Coverner's patch r1919860 as mentioned
-    rem in the Apache Lounge 2.4.62 Changelog
-    rem
-    rem Note \h denotes horizontal whitespace...
-    perl -pi.bak -0777 -Mopen=OUT,:raw -e ^" ^
-      s~^([\h]+^)(int is_proxyreq = 0;\n^)(\n[\h]+ctx^)~${1}${2}${1}int prefix_added = 0;\n${3}~smg; ^
-      s~^([\h]+^)(newuri = apr_pstrcat[^^;]+;^)\n([\h]+\}^)~${1}${2}\n${1}prefix_added = 1;\n${3}~smg; ^
-      ^" modules\mappers\mod_rewrite.c
-  )
 
   rem Patch CMakeLists.txt to build JBlond mod_log_rotate, if source module present.
   rem
