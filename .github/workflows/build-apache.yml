@@ -15,16 +15,6 @@ on:
         required: true
         default: x64
         options: [x64, x86]
-  push:
-    branches: [ main ]
-    paths:
-      - 'build_all.bat'
-      - '.github/workflows/**'
-  pull_request:
-    branches: [ main ]
-    paths:
-      - 'build_all.bat'
-      - '.github/workflows/**'
 
 env:
   BUILD_BASE: C:\Development\Apache24\build
