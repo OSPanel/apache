@@ -248,24 +248,6 @@ rem Request PDB files - ON or OFF.
 rem
 set INSTALL_PDB=OFF
 
-rem Define build packages with their version. This is also the recommended build order.
-
-set ZLIB=zlib-1.3.1
-set PCRE2=pcre2-10.45
-set EXPAT=expat-2.7.1
-set OPENSSL=openssl-3.5.1
-set LIBXML2=libxml2-2.14.5
-set JANSSON=jansson-2.14.1
-set BROTLI=brotli-1.1.0
-set LUA=lua-5.4.8
-set APR=apr-1.7.6
-set APR-ICONV=apr-iconv-1.2.2
-set APR-UTIL=apr-util-1.6.3
-set NGHTTP2=nghttp2-1.66.0
-set CURL=curl-8.15.0
-set HTTPD=httpd-2.4.65
-set MOD_FCGID=mod_fcgid-2.3.9
-
 rem Use OpenSSL with CURL - ON or OFF.
 rem
 set CURL_USE_OPENSSL=ON
