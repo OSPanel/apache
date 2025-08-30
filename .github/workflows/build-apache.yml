@@ -73,7 +73,7 @@ jobs:
             perl
             nasm
             zip
-            p7zip  # 7z в MSYS2
+            p7zip
           path-type: minimal
 
       - name: Show MSYS2 env
