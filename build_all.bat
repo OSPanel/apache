@@ -470,23 +470,8 @@ rem
 call :check_package_source %APR-UTIL%
 
 if !STATUS! == 0 (
-  rem Check if we're building APR-UTIL 1.6.3
-  rem
-  if not x%APR-UTIL:1.6.3=% == x%APR-UTIL% (
-    rem Patch include\apu.hwc and CMakelists.txt to support OpenSSL, which is needed with APU_HAVE_CRYPTO.
-    rem
-    if exist "%PREFIX%\lib\libcrypto.lib" (
-      perl -pi.bak -e ^" ^
-        s~^(APU_HAVE_OPENSSL[\s]+^)0$~${1}\@apu_have_openssl_10\@~; ^
-        ^" include\apu.hwc
+  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DOpenSSL_ROOT_DIR=%PREFIX% -DOpenSSL_INCLUDE_DIR=%PREFIX%\include -DOpenSSL_CRYPTO_LIBRARY=%PREFIX%\lib\libcrypto.lib -DOpenSSL_SSL_LIBRARY=%PREFIX%\lib\libssl.lib -DAPU_HAVE_CRYPTO=ON -DAPU_HAVE_DSO=ON -DAPRUTIL_WITH_ODBC=ON -DAPRUTIL_WITH_LDAP=ON -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB% -DAPRUTIL_EXTRA_LIBS=odbc32.lib;odbccp32.lib;wldap32.lib"
 
-      perl -pi.bak -e ^" ^
-        s~^([\s]+^)(SET.+apu_have_crypto_10 1\^)^)$~${1}${2} \n${1}SET(apu_have_openssl_10 1^)~; ^
-        ^" CMakeLists.txt
-    )
-  )
-
-  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DOPENSSL_ROOT_DIR=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DAPU_HAVE_CRYPTO=OFF -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%" -DAPRUTIL_WITH_ODBC=OFF -DAPRUTIL_WITH_LDAP=OFF
   call :build_package %APR-UTIL% "!APR-UTIL_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
 )
 
