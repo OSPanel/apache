@@ -34,7 +34,6 @@ set "JANSSON=jansson-2.14.1"
 set "BROTLI=brotli-1.1.0"
 set "LUA=lua-5.4.8"
 set "APR=apr-1.7.6"
-set "APR-ICONV=apr-iconv-1.2.2"
 set "APR-UTIL=apr-util-1.6.3"
 set "NGHTTP2=nghttp2-1.66.0"
 set "CURL=curl-8.15.0"
@@ -50,7 +49,6 @@ set "URL_JANSSON=https://github.com/akheron/jansson/releases/download/v2.14.1/ja
 set "URL_BROTLI=https://github.com/google/brotli/archive/refs/tags/v1.1.0.tar.gz"
 set "URL_LUA=https://www.lua.org/ftp/lua-5.4.8.tar.gz"
 set "URL_APR=https://downloads.apache.org/apr/apr-1.7.6.tar.gz"
-set "URL_APR_ICONV=https://downloads.apache.org/apr/apr-iconv-1.2.2.tar.gz"
 set "URL_APR_UTIL=https://downloads.apache.org/apr/apr-util-1.6.3.tar.gz"
 set "URL_NGHTTP2=https://github.com/nghttp2/nghttp2/releases/download/v1.66.0/nghttp2-1.66.0.tar.xz"
 set "URL_CURL=https://curl.se/download/curl-8.15.0.tar.xz"
@@ -68,7 +66,6 @@ call :_fetch_and_unpack "%JANSSON%"    "%URL_JANSSON%"
 call :_fetch_and_unpack "%BROTLI%"     "%URL_BROTLI%"  "brotli-1.1.0"  1
 call :_fetch_and_unpack "%LUA%"        "%URL_LUA%"
 call :_fetch_and_unpack "%APR%"        "%URL_APR%"
-call :_fetch_and_unpack "%APR-ICONV%"  "%URL_APR_ICONV%"
 call :_fetch_and_unpack "%APR-UTIL%"   "%URL_APR_UTIL%"
 call :_fetch_and_unpack "%NGHTTP2%"    "%URL_NGHTTP2%"
 call :_fetch_and_unpack "%CURL%"       "%URL_CURL%"
@@ -460,116 +457,8 @@ rem
 call :check_package_source %APR%
 
 if !STATUS! == 0 (
-  rem Patch apr.hw - _WIN32_WINT to 0x600 series - needed for APR-ICONV build.
-  perl -pi.bak -e ^" ^
-    s~(#define _WIN32_WINNT ^)0x05\d\d$~${1}0x0600~; ^
-    ^" include\apr.hw
-
   set "APR_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DMIN_WINDOWS_VER=0x0600 -DAPR_HAVE_IPV6=ON -DAPR_INSTALL_PRIVATE_H=ON -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%"
   call :build_package %APR% "!APR_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
-)
-
-rem ------------------------------------------------------------------------------
-rem
-rem APR-ICONV
-
-rem Note APR-ICONV makefiles rebuild APR since the above CMake puts the build files elsewhere.
-
-rem Check for package and switch to source folder.
-rem
-call :check_package_source %APR-ICONV%
-
-if !STATUS! == 0 (
-  echo. & echo Building %APR-ICONV%
-
-  rem Create non-version specific folder links to the APR, APR-ICONV and APR-UTIL sources.
-  rem The various makefiles assume these exist.
-  rem
-  pushd "%BUILD_BASE%\..\src"
-  mklink /d apr %APR%
-  mklink /d apr-iconv %APR-ICONV%
-  mklink /d apr-util %APR-UTIL%
-  popd
-
-  rem Copy apr.h and apr_escape_test_char.h from APR build into API source.
-  rem
-  copy /y "%BUILD_BASE%\apr\apr*.h" ".\include" 1>nul
-  copy /y "%BUILD_BASE%\apr\apr_escape_test_char.h" "..\%APR%\include" 1>nul
-
-  rem Choose platform options; reference as delayed expansion variables.
-  rem
-  if /i "%PLATFORM%" == "x64" (
-    set BUILD_CFG=x64
-    set BUILD_DIR=x64
-  ) else (
-    set BUILD_CFG=Win32
-    set BUILD_DIR=.
-  )
-
-  rem Patch modules.mk.win for x64 Debug
-  rem
-  perl -pi.bak -e ^" ^
-    m~(APR_SOURCE\^)\\^)(.+\\^)(Debug\\libapr-1^)~;{${2} ? $s=${2} : $s=$s}; ^
-    s~(API_SOURCE\^)\\^)(Debug\\libapriconv-1^)~{$s ? ${1}.$s.${2} : $^&}~e; ^
-    s~(CFG_OUTPUT  = ^)(Debug\\iconv^)~{$s ? ${1}.$s.${2} : $^&}~e; ^
-    ^" build\modules.mk.win
-
-  rmdir /s /q Debug LibD LibR Release x64 1>nul 2>&1
-  nmake /f apriconv.mak CFG="apriconv - !BUILD_CFG! %BUILD_TYPE%" & call :get_status
-  if not !STATUS! == 0 (
-    echo nmake apriconv.mak for %APR-ICONV% failed with status !STATUS!
-    exit /b !STATUS!
-  )
-  nmake /f libapriconv.mak CFG="libapriconv - !BUILD_CFG! %BUILD_TYPE%" & call :get_status
-  if not !STATUS! == 0 (
-    echo nmake libapriconv.mak for %APR-ICONV% failed with status !STATUS!
-    exit /b !STATUS!
-  )
-  pushd ccs
-  nmake /f Makefile.win BUILD_MODE="!BUILD_CFG! %BUILD_TYPE%" BIND_MODE="shared" & call :get_status
-  if not !STATUS! == 0 (
-    echo nmake ccs Makefile.win for %APR-ICONV% failed with status !STATUS!
-    exit /b !STATUS!
-  )
-  popd
-  pushd ces
-  nmake /f Makefile.win BUILD_MODE="!BUILD_CFG! %BUILD_TYPE%" BIND_MODE="shared" & call :get_status
-  if not !STATUS! == 0 (
-    echo nmake ces Makefile.win for %APR-ICONV% failed with status !STATUS!
-    exit /b !STATUS!
-  )
-  popd
-
-  rem Manual install required with apr-iconv
-  rem
-  if exist "!BUILD_DIR!\LibD\apriconv-1.lib" (
-    echo -- Installing: "%PREFIX%\lib\apriconv-1.lib"
-    copy /b /y "!BUILD_DIR!\LibD\apriconv-1.lib" "%PREFIX%\lib" 1>nul 2>&1
-  )
-  if exist "!BUILD_DIR!\LibR\apriconv-1.lib" (
-    echo -- Installing: "%PREFIX%\lib\apriconv-1.lib"
-    copy /b /y "!BUILD_DIR!\LibR\apriconv-1.lib" "%PREFIX%\lib" 1>nul 2>&1
-  )
-  if exist "!BUILD_DIR!\%BUILD_TYPE%\libapriconv-1.lib" (
-    echo -- Installing: "%PREFIX%\lib\libapriconv-1.lib"
-    copy /b /y "!BUILD_DIR!\%BUILD_TYPE%\libapriconv-1.lib" "%PREFIX%\lib" 1>nul 2>&1
-  )
-  if exist "!BUILD_DIR!\%BUILD_TYPE%\libapriconv-1.dll" (
-    echo -- Installing: "%PREFIX%\bin\libapriconv-1.dll"
-    copy /b /y "!BUILD_DIR!\%BUILD_TYPE%\libapriconv-1.dll" "%PREFIX%\bin" 1>nul 2>&1
-  )
-  if exist "include\api_version.h" (
-    echo -- Installing: "%PREFIX%\include\api_version.h"
-    copy /b /y "include\api_version.h" "%PREFIX%\include" 1>nul 2>&1
-  )
-  if exist "include\apr_iconv.h" (
-    echo -- Installing: "%PREFIX%\include\apr_iconv.h"
-    copy /b /y "include\apr_iconv.h" "%PREFIX%\include" 1>nul 2>&1
-  )
-  if exist "!BUILD_DIR!\%BUILD_TYPE%\iconv" (
-    echo -- Installing: "%PREFIX%\bin\iconv"
-    xcopy "!BUILD_DIR!\%BUILD_TYPE%\iconv\*.so" "%PREFIX%\bin\iconv\" /c /d /i /y 1>nul 2>&1
-  )
 )
 
 rem ------------------------------------------------------------------------------
@@ -581,15 +470,6 @@ rem
 call :check_package_source %APR-UTIL%
 
 if !STATUS! == 0 (
-  rem Patch CMakelists.txt to support APR-ICONV if we've built it.
-  rem
-  if exist "%PREFIX%\lib\libapriconv-1.lib" (
-    perl -pi.bak -e ^" ^
-      s~^(SET.+APR_LIBRARIES[\s]+^)(\x22^)(.+libapr^)(-1.lib^)(.+ CACHE^)~${1}${2}${3}${4}${2} ${2}${3}iconv${4}${5}~; ^
-      s~^(apu_have_apr_iconv_10^) 0~${1} 1~; ^
-      ^" CMakeLists.txt
-  )
-
   rem Check if we're building APR-UTIL 1.6.3
   rem
   if not x%APR-UTIL:1.6.3=% == x%APR-UTIL% (
@@ -606,7 +486,7 @@ if !STATUS! == 0 (
     )
   )
 
-  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DOPENSSL_ROOT_DIR=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DAPU_HAVE_CRYPTO=ON -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%"
+  set "APR-UTIL_CMAKE_OPTS=-DCMAKE_INSTALL_PREFIX=%PREFIX% -DOPENSSL_ROOT_DIR=%PREFIX% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DAPU_HAVE_CRYPTO=OFF -DAPR_BUILD_TESTAPR=OFF -DINSTALL_PDB=%INSTALL_PDB%"
   call :build_package %APR-UTIL% "!APR-UTIL_CMAKE_OPTS!" & if not !STATUS! == 0 exit /b !STATUS!
 )
 
@@ -839,7 +719,7 @@ if exist "%BUILD_BASE%\!PACKAGE!" (
 
   rem Run CMake to create an NMake makefile, which we then process.
 
-  cmake -G "NMake Makefiles" %~2 -DAPU_HAVE_DSO=ON -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_C_FLAGS="/DFD_SETSIZE=32768" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -S "!SRC_DIR!" -B . & call :get_status
+  cmake -G "NMake Makefiles" %~2 -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_C_FLAGS="/DFD_SETSIZE=32768" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -S "!SRC_DIR!" -B . & call :get_status
   if !STATUS! == 0 (
     nmake & call :get_status
     if !STATUS! == 0 (
