@@ -839,7 +839,7 @@ if exist "%BUILD_BASE%\!PACKAGE!" (
 
   rem Run CMake to create an NMake makefile, which we then process.
 
-  cmake -G "NMake Makefiles" %~2 -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_C_FLAGS="/DFD_SETSIZE=32768" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -S "!SRC_DIR!" -B . & call :get_status
+  cmake -G "NMake Makefiles" %~2 -DAPU_HAVE_DSO=ON -DCMAKE_EXE_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_SHARED_LINKER_FLAGS="/DYNAMICBASE" -DCMAKE_C_FLAGS="/DFD_SETSIZE=32768" -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -S "!SRC_DIR!" -B . & call :get_status
   if !STATUS! == 0 (
     nmake & call :get_status
     if !STATUS! == 0 (
